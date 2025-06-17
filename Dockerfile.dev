@@ -1,0 +1,74 @@
+# 使用 Ubuntu 20.04 作为基础
+FROM ubuntu:focal
+
+LABEL maintainer="BACnet Stack Zsh Development Environment"
+
+# 设置环境变量，避免交互式提示
+ENV DEBIAN_FRONTEND=noninteractive
+
+# --- 步骤 1: 以 root 用户身份安装所有系统级依赖 ---
+# 关键修复：在列表中添加 ca-certificates
+RUN set -xe; \
+  apt-get update && \
+  apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    curl \
+    git \
+    ca-certificates \
+    vim \
+    gdb \
+    sudo \
+    zsh \
+    sed && \
+  apt-get -y autoclean && \
+  apt-get -y clean && \
+  rm -rf /var/lib/apt/lists/*
+
+# --- 步骤 2: 创建名为 developer 的普通用户并设置 ---
+# 直接在这里将其默认 shell 设置为 zsh
+RUN useradd -m -s /bin/zsh developer && \
+    usermod -aG sudo developer && \
+    echo "developer:developer" | chpasswd && \
+    echo "developer ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# --- 步骤 3: 切换到 developer 用户来执行用户级别的安装 ---
+USER developer
+# 设置 HOME 环境变量，确保后续命令在正确的用户目录下执行
+ENV HOME=/home/developer
+# 先进入用户主目录，以确保 .oh-my-zsh 安装在正确的位置
+WORKDIR /home/developer
+
+# --- 步骤 4: 安装 Oh My Zsh 和 插件，并进行最终配置 ---
+RUN set -xe; \
+    # 导出环境变量以绕过 chsh
+    export RUNZSH=no; \
+    export KEEP_ZSHRC=yes; \
+    # 安装 Oh My Zsh (这里是你换成的gitee源)
+    sh -c "$(curl -fsSL https://gitee.com/pocmon/ohmyzsh/raw/master/tools/install.sh)"; \
+    \
+    # 定义插件目录
+    ZSH_CUSTOM="${HOME}/.oh-my-zsh/custom"; \
+    \
+    # 下载插件
+    git clone https://github.moeyy.xyz/https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions; \
+    git clone https://github.moeyy.xyz/https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting; \
+    # 下载 Powerlevel10k 主题
+    git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k; \
+    \
+    # 配置 .zshrc 文件
+    sed -i 's/^plugins=(git)$/plugins=(git zsh-autosuggestions zsh-syntax-highlighting z extract)/' ${HOME}/.zshrc; \
+    # 设置主题为 Powerlevel10k
+    sed -i 's/^ZSH_THEME=".*"/ZSH_THEME="powerlevel10k\/powerlevel10k"/' ${HOME}/.zshrc; \
+    \
+    # 将挂载目录标记为 git 的安全目录
+    git config --global --add safe.directory /home/developer/bacnet-stack; \
+    \
+    # 隐藏 zsh-autosuggestions 的警告信息
+    git config --global zsh-autosuggestions.hide-warning true
+
+# --- 步骤 5: 设置最终的默认工作目录 ---
+WORKDIR /home/developer/bacnet-stack
+
+# 默认命令，让容器保持在后台运行
+CMD ["sleep", "infinity"]
