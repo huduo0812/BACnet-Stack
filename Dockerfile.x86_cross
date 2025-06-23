@@ -1,0 +1,42 @@
+# 阶段 1：构建阶段 (在 ARM 服务器上运行)
+# 基础镜像是 ARM 架构的 Ubuntu
+FROM ubuntu:20.04 AS builder
+
+# 安装依赖，关键是安装 x86_64 的交叉编译工具链
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    make \
+    cmake \
+    gcc-x86-64-linux-gnu \
+    g++-x86-64-linux-gnu && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build/
+
+# 拷贝源代码和我们创建的工具链文件
+COPY ./ /build/source/
+COPY x86_64-toolchain.cmake /build/
+
+# 运行交叉编译
+RUN set -xe; \
+    mkdir -p /build/x86_build && \
+    cd /build/x86_build && \
+    # 核心步骤：告诉 CMake 使用我们的交叉编译工具链文件
+    cmake -DCMAKE_TOOLCHAIN_FILE=/build/x86_64-toolchain.cmake ../source/ && \
+    make -j$(nproc)
+
+# 阶段 2：最终发布阶段 (为 x86 平台准备)
+# 关键：基础镜像必须是 x86 架构的 (amd64)
+FROM amd64/ubuntu:20.04 AS release
+
+WORKDIR /opt/bacnet/
+
+# 从构建阶段拷贝编译好的 x86 可执行文件
+# 这些文件已经是 x86 格式了
+COPY --from=builder /build/x86_build/bin/* /opt/bacnet/bin/
+
+# 设置默认启动命令
+EXPOSE 47808/udp
+ENTRYPOINT ["/opt/bacnet/bin/server"]
+CMD ["4321", "x86_server"]

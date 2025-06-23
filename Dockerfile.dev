@@ -1,7 +1,15 @@
+# 接收来自 docker build 命令的构建参数
+ARG HOST_UID=1000
+ARG HOST_GID=1000
+
 # 使用 Ubuntu 20.04 作为基础
 FROM ubuntu:focal
 
 LABEL maintainer="BACnet Stack Zsh Development Environment"
+
+# 将构建参数再次声明，以便在后续指令中使用
+ARG HOST_UID
+ARG HOST_GID
 
 # 设置环境变量，避免交互式提示
 ENV DEBIAN_FRONTEND=noninteractive
@@ -10,6 +18,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # 关键修复：在列表中添加 ca-certificates
 RUN set -xe; \
   apt-get update && \
+  mkdir -p /etc/ssl/private && \
   apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -21,16 +30,22 @@ RUN set -xe; \
     sudo \
     zsh \
     sed && \
+  update-ca-certificates -f && \
   apt-get -y autoclean && \
   apt-get -y clean && \
   rm -rf /var/lib/apt/lists/*
 
-# --- 步骤 2: 创建名为 developer 的普通用户并设置 ---
-# 直接在这里将其默认 shell 设置为 zsh
-RUN useradd -m -s /bin/zsh developer && \
-    usermod -aG sudo developer && \
-    echo "developer:developer" | chpasswd && \
+# --- 步骤 2: 创建一个与主机用户ID/GID完全匹配的 developer 用户 ---
+RUN set -xe; \
+    # 创建一个与主机 GID 匹配的组
+    groupadd -g $HOST_GID developer; \
+    # 创建一个与主机 UID/GID 匹配的用户，并将其加入 sudo 组
+    # 直接在这里将其默认 shell 设置为 zsh
+    useradd -m -s /bin/zsh -u $HOST_UID -g $HOST_GID developer; \
+    usermod -aG sudo developer; \
+    echo "developer:developer" | chpasswd; \
     echo "developer ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
 
 # --- 步骤 3: 切换到 developer 用户来执行用户级别的安装 ---
 USER developer
