@@ -82,6 +82,8 @@ CTestTestfile.cmake
 /cmake-build-*
 /.idea
 
+*build*
+
 # doxygen artifacts
 doc/output/html/
 
