@@ -5,7 +5,7 @@ ARG HOST_GID=1000
 # 使用 Ubuntu 20.04 作为基础
 FROM ubuntu:focal
 
-LABEL maintainer="BACnet Stack Zsh Development Environment"
+LABEL maintainer="BACnet Stack Zsh Development Environment with Chinese Support"
 
 # 将构建参数再次声明，以便在后续指令中使用
 ARG HOST_UID
@@ -16,9 +16,17 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # --- 步骤 1: 以 root 用户身份安装所有系统级依赖 ---
 # 关键修复：在列表中添加 ca-certificates
+# 增加了 locales 和中文语言包
 RUN set -xe; \
   apt-get update && \
+  # 安装 locales 包以支持多语言环境
+  apt-get install -y --no-install-recommends locales language-pack-zh-hans && \
+  # 生成中文 UTF-8 区域设置
+  echo "zh_CN.UTF-8 UTF-8" >> /etc/locale.gen && \
+  locale-gen && \
+  # 手动创建 /etc/ssl/private 目录
   mkdir -p /etc/ssl/private && \
+  # 安装所有其他依赖
   apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -27,13 +35,20 @@ RUN set -xe; \
     ca-certificates \
     vim \
     gdb \
+    tmux \
     sudo \
     zsh \
     sed && \
+  # 更新证书
   update-ca-certificates -f && \
   apt-get -y autoclean && \
   apt-get -y clean && \
   rm -rf /var/lib/apt/lists/*
+
+# --- 设置全局的中文环境变量 ---
+ENV LANG zh_CN.UTF-8
+ENV LANGUAGE zh_CN:zh
+ENV LC_ALL zh_CN.UTF-8
 
 # --- 步骤 2: 创建一个与主机用户ID/GID完全匹配的 developer 用户 ---
 RUN set -xe; \
@@ -66,10 +81,10 @@ RUN set -xe; \
     ZSH_CUSTOM="${HOME}/.oh-my-zsh/custom"; \
     \
     # 下载插件
-    git clone https://github.moeyy.xyz/https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions; \
-    git clone https://github.moeyy.xyz/https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting; \
+    git clone --depth=1 https://gitee.com/zsh-users/zsh-autosuggestions.git ${ZSH_CUSTOM}/plugins/zsh-autosuggestions; \
+    git clone --depth=1 https://gitee.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM}/plugins/zsh-syntax-highlighting; \
     # 下载 Powerlevel10k 主题
-    git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k; \
+    git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM}/themes/powerlevel10k; \
     \
     # 配置 .zshrc 文件
     sed -i 's/^plugins=(git)$/plugins=(git zsh-autosuggestions zsh-syntax-highlighting z extract)/' ${HOME}/.zshrc; \
